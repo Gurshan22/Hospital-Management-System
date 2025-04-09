@@ -1,0 +1,68 @@
+//User Authentication System:
+CREATE TABLE Users (
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    staff_id INT,
+    role ENUM('Admin', 'Doctor', 'Nurse', 'Receptionist') NOT NULL,
+    last_login DATETIME,
+    FOREIGN KEY (staff_id) REFERENCES Staff(staff_id)
+);
+
+//Stored Procedures:
+DELIMITER //
+CREATE PROCEDURE GenerateMonthlyReport(IN month INT, IN year INT)
+BEGIN
+    -- Total appointments
+    SELECT COUNT(*) AS total_appointments
+    FROM Appointments
+    WHERE MONTH(appointment_date) = month AND YEAR(appointment_date) = year;
+    
+    -- Revenue report
+    SELECT SUM(total_amount) AS total_revenue, SUM(paid_amount) AS paid_amount
+    FROM Billing
+    WHERE MONTH(billing_date) = month AND YEAR(billing_date) = year;
+    
+    -- Most active doctors
+    SELECT s.first_name, s.last_name, COUNT(a.appointment_id) AS appointment_count
+    FROM Appointments a
+    JOIN Staff s ON a.doctor_id = s.staff_id
+    WHERE MONTH(a.appointment_date) = month AND YEAR(a.appointment_date) = year
+    GROUP BY a.doctor_id
+    ORDER BY appointment_count DESC
+    LIMIT 5;
+END //
+DELIMITER ;
+
+//Triggers:
+-- Update inventory when items are used
+DELIMITER //
+CREATE TRIGGER after_appointment_completed
+AFTER UPDATE ON Appointments
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'Completed' AND OLD.status != 'Completed' THEN
+        -- Example: Reduce inventory for common items used
+        UPDATE Inventory SET quantity = quantity - 1 WHERE name = 'Disposable Gloves';
+        UPDATE Inventory SET quantity = quantity - 1 WHERE name = 'Face Mask';
+    END IF;
+END //
+DELIMITER ;
+
+//Views:
+-- Patient medical history view
+CREATE VIEW PatientMedicalHistory AS
+SELECT p.patient_id, CONCAT(p.first_name, ' ', p.last_name) AS patient_name,
+       mr.record_date, mr.diagnosis, mr.treatment,
+       CONCAT(s.first_name, ' ', s.last_name) AS doctor_name
+FROM MedicalRecords mr
+JOIN Patients p ON mr.patient_id = p.patient_id
+JOIN Staff s ON mr.doctor_id = s.staff_id
+ORDER BY mr.record_date DESC;
+
+//Advanced Search Functionality:
+-- Search patients with multiple criteria
+SELECT * FROM Patients
+WHERE (first_name LIKE '%John%' OR last_name LIKE '%John%')
+  AND (YEAR(CURDATE()) - YEAR(dob) BETWEEN 18 AND 65
+  AND registration_date > '2023-01-01';
